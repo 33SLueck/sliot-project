@@ -31,6 +31,8 @@ jobs:
 
     - name: Log in to Container Registry
       uses: docker/login-action@v3
+      id: login
+      continue-on-error: true
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
@@ -58,6 +60,7 @@ jobs:
 
     - name: Build and push Frontend image
       uses: docker/build-push-action@v5
+      if: steps.login.outcome == 'success'
       with:
         context: ./frontend
         push: true
@@ -68,6 +71,7 @@ jobs:
 
     - name: Build and push CMS image
       uses: docker/build-push-action@v5
+      if: steps.login.outcome == 'success'
       with:
         context: ./cms
         push: true
