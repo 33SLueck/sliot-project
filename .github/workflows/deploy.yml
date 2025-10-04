@@ -83,18 +83,48 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
+        timeout: 60s
+        command_timeout: 15m
         script: |
           # Login to GitHub Container Registry
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           
+          # Create project directory if it doesn't exist
+          sudo mkdir -p /home/ubuntu/sliot-project
+          sudo chown ubuntu:ubuntu /home/ubuntu/sliot-project
+          
           # Navigate to project directory
           cd /home/ubuntu/sliot-project
+          
+          # Clone or update repository
+          if [ ! -d ".git" ]; then
+            git clone https://github.com/33SLueck/sliot-project.git .
+          else
+            git pull origin main
+          fi
+          
+          # Install Docker and Docker Compose if not already installed
+          if ! command -v docker &> /dev/null; then
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sudo sh get-docker.sh
+            sudo usermod -aG docker ubuntu
+            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+            # Restart shell to apply docker group
+            sudo systemctl restart docker
+          fi
+          
+          # Create necessary directories
+          mkdir -p postgres-data
           
           # Pull latest images
           docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
           
-          # Restart services with new images
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+          # Start services
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
           
           # Clean up old images
           docker image prune -f
+          
+          # Show status
+          docker compose ps
