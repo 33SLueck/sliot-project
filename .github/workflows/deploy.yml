@@ -77,14 +77,14 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Deploy to EC2
-      if: github.ref == 'refs/heads/main'
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ secrets.EC2_HOST }}
+        host: ec2-16-16-134-76.eu-north-1.compute.amazonaws.com
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         timeout: 60s
         command_timeout: 15m
+        debug: true
         script: |
           # Create project directory if it doesn't exist
           sudo mkdir -p /home/ubuntu/sliot-project
