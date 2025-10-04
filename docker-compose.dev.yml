@@ -1,0 +1,14 @@
+# Local Development Docker Compose Override
+# Use with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  nextjs:
+    ports:
+      - "8080:3000"
+      - "8443:3000"
+    environment:
+      - NODE_ENV=development
+
+  n8n:
+    ports:
+      - "5678:5678"  # Direct access for local development

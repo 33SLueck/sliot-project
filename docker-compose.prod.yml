@@ -1,0 +1,25 @@
+# Production Docker Compose Override
+# Use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  nextjs:
+    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/sliot-project}-frontend:latest
+    ports:
+      - "80:3000"
+      - "443:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_CMS_URL=http://cms:4000
+      - NEXT_PUBLIC_N8N_URL=http://n8n:5678
+
+  cms:
+    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/sliot-project}-cms:latest
+
+  n8n:
+    ports:
+      - "127.0.0.1:5678:5678"  # SSH tunnel only in production
+    environment:
+      - N8N_SECURE_COOKIE=true
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
