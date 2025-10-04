@@ -86,9 +86,6 @@ jobs:
         timeout: 60s
         command_timeout: 15m
         script: |
-          # Login to GitHub Container Registry
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          
           # Create project directory if it doesn't exist
           sudo mkdir -p /home/ubuntu/sliot-project
           sudo chown ubuntu:ubuntu /home/ubuntu/sliot-project
@@ -112,16 +109,26 @@ jobs:
             sudo chmod +x /usr/local/bin/docker-compose
             # Restart shell to apply docker group
             sudo systemctl restart docker
+            # Wait for docker to be ready
+            sleep 10
           fi
           
           # Create necessary directories
           mkdir -p postgres-data
           
-          # Pull latest images
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+          # Try to login to GitHub Container Registry (optional, will work without it for public images)
+          echo "Attempting to login to GitHub Container Registry..."
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || echo "Registry login failed, continuing with public access..."
           
-          # Start services
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+          # Try to pull latest images, fallback to local build
+          echo "Attempting to pull latest images..."
+          if docker compose -f docker-compose.yml -f docker-compose.prod.yml pull; then
+            echo "Images pulled successfully, starting with registry images..."
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+          else
+            echo "Pull failed, building images locally..."
+            docker compose -f docker-compose.yml -f docker-compose.local-build.yml up -d --build
+          fi
           
           # Clean up old images
           docker image prune -f
