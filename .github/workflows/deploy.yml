@@ -18,6 +18,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Set lowercase repository name
+      id: lowercase
+      run: echo "repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -33,7 +37,7 @@ jobs:
       with:
         context: ./frontend
         push: true
-        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
+        tags: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.repo }}/nextjs:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -42,7 +46,7 @@ jobs:
       with:
         context: ./cms
         push: true
-        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-cms:latest
+        tags: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.repo }}/cms:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
 

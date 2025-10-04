@@ -23,11 +23,11 @@ mkdir -p /home/ubuntu/sliot-project
 cd /home/ubuntu/sliot-project
 
 # Clone repository (you'll need to replace with your repo URL)
-# git clone https://github.com/your-username/sliot-project.git .
+# git clone https://github.com/33SLueck/sliot-project.git .
 
 # Set up environment for production
 export NODE_ENV=production
-export GITHUB_REPOSITORY="your-username/sliot-project"
+export GITHUB_REPOSITORY="33SLueck/sliot-project"
 
 # Create directories for persistent data
 mkdir -p postgres-data
