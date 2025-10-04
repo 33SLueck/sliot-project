@@ -17,6 +17,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Debug connection info
+      run: |
+        echo "Connecting to: ec2-16-16-134-76.eu-north-1.compute.amazonaws.com"
+        echo "Username will be: ${{ secrets.EC2_USERNAME }}"
+        echo "Key configured: ${{ secrets.EC2_SSH_KEY != '' }}"
+
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
