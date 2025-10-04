@@ -3,82 +3,19 @@ name: Deploy to EC2
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Set lowercase repository name
-      id: lowercase
-      run: echo "repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      id: login
-      continue-on-error: true
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Extract metadata for Frontend
-      id: meta-frontend
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.repo }}/nextjs
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=raw,value=latest
-
-    - name: Extract metadata for CMS
-      id: meta-cms
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.repo }}/cms
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=raw,value=latest
-
-    - name: Build and push Frontend image
-      uses: docker/build-push-action@v5
-      if: steps.login.outcome == 'success'
-      with:
-        context: ./frontend
-        push: true
-        tags: ${{ steps.meta-frontend.outputs.tags }}
-        labels: ${{ steps.meta-frontend.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: Build and push CMS image
-      uses: docker/build-push-action@v5
-      if: steps.login.outcome == 'success'
-      with:
-        context: ./cms
-        push: true
-        tags: ${{ steps.meta-cms.outputs.tags }}
-        labels: ${{ steps.meta-cms.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.0
@@ -120,22 +57,18 @@ jobs:
           # Create necessary directories
           mkdir -p postgres-data
           
-          # Try to login to GitHub Container Registry (optional, will work without it for public images)
-          echo "Attempting to login to GitHub Container Registry..."
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || echo "Registry login failed, continuing with public access..."
+          # Clean up any existing containers
+          docker-compose -f docker-compose.yml -f docker-compose.local-build.yml down --remove-orphans || true
           
-          # Try to pull latest images, fallback to local build
-          echo "Attempting to pull latest images..."
-          if docker compose -f docker-compose.yml -f docker-compose.prod.yml pull; then
-            echo "Images pulled successfully, starting with registry images..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-          else
-            echo "Pull failed, building images locally..."
-            docker compose -f docker-compose.yml -f docker-compose.local-build.yml up -d --build
-          fi
+          # Build and start services locally
+          echo "Building and starting services locally..."
+          docker-compose -f docker-compose.yml -f docker-compose.local-build.yml up -d --build
           
           # Clean up old images
           docker image prune -f
           
           # Show status
-          docker compose ps
+          docker-compose ps
+          
+          # Show logs for debugging
+          docker-compose logs --tail=50
