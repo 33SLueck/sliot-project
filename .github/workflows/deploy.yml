@@ -77,91 +77,122 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        timeout: 60s
-        command_timeout: 15m
+        timeout: 120s
+        command_timeout: 20m
         script: |
           # Navigate to project directory
           cd /home/ec2-user/sliot-project
           
           # Pull latest code
+          echo "=== Pulling Latest Code ==="
           git pull origin main
           
-          # Install Docker and Docker Compose if not already installed
-          if ! command -v docker &> /dev/null; then
-            sudo yum update -y
-            sudo yum install -y docker
+          # Ensure Docker is running
+          echo "=== Checking Docker Status ==="
+          if ! sudo systemctl is-active --quiet docker; then
+            echo "Starting Docker service..."
             sudo systemctl start docker
-            sudo systemctl enable docker
-            sudo usermod -aG docker ec2-user
-            
-            # Install Docker Compose
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-            sleep 10
+            sleep 5
           fi
           
           # Create necessary directories
           mkdir -p postgres-data
           
-          # Stop running containers
-          docker-compose -f docker-compose.yml -f docker-compose.prod.yml down --remove-orphans || true
+          # Stop running containers gracefully
+          echo "=== Stopping Current Services ==="
+          docker-compose -f docker-compose.yml -f docker-compose.local-build.yml down --remove-orphans || true
           
-          # Pull latest images from registry
-          docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull
+          # Clean up any dangling containers
+          docker container prune -f || true
           
-          # Start services with production configuration
-          echo "Starting services with production configuration..."
-          if docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d; then
+          # Start services (using local-build for now, can switch to prod later)
+          echo "=== Starting Services ==="
+          if docker-compose -f docker-compose.yml -f docker-compose.local-build.yml up -d --build; then
             echo "✅ Services started successfully!"
           else
             echo "❌ Service startup failed"
-            docker-compose logs --tail=20
+            docker-compose -f docker-compose.yml -f docker-compose.local-build.yml logs --tail=20
             exit 1
           fi
           
           # Wait for services to be ready
-          echo "Waiting for services to be ready..."
-          sleep 30
+          echo "=== Waiting for Services ==="
+          sleep 45
           
-          # Run database migrations
+          # Check if database is ready before migrations
+          echo "=== Checking Database Connectivity ==="
+          for i in {1..10}; do
+            if docker-compose -f docker-compose.yml -f docker-compose.local-build.yml exec -T db pg_isready -U postgres; then
+              echo "✅ Database is ready"
+              break
+            fi
+            echo "Waiting for database... ($i/10)"
+            sleep 10
+          done
+          
+          # Run database migrations with retry
           echo "=== Running Database Migrations ==="
-          if docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec -T cms npx prisma migrate deploy; then
-            echo "✅ Database migrations completed successfully"
-          else
-            echo "❌ Database migrations failed"
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs cms --tail=20
-            exit 1
-          fi
+          for i in {1..3}; do
+            if docker-compose -f docker-compose.yml -f docker-compose.local-build.yml exec -T cms npx prisma migrate deploy; then
+              echo "✅ Database migrations completed successfully"
+              break
+            else
+              echo "❌ Migration attempt $i failed"
+              if [ $i -eq 3 ]; then
+                echo "❌ Database migrations failed after 3 attempts"
+                docker-compose -f docker-compose.yml -f docker-compose.local-build.yml logs cms --tail=20
+                exit 1
+              fi
+              sleep 10
+            fi
+          done
           
-          # Validate deployment
+          # Validate deployment with retries
           echo "=== Validating Deployment ==="
-          sleep 10
+          sleep 15
           
-          # Test CMS health
-          if curl -f http://localhost:4000/api/categories > /dev/null 2>&1; then
-            echo "✅ CMS API is responding"
-          else
-            echo "❌ CMS API health check failed"
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs cms --tail=20
-            exit 1
-          fi
+          # Test CMS health with retry
+          echo "Testing CMS API..."
+          for i in {1..5}; do
+            if curl -f http://localhost:4000/api/categories > /dev/null 2>&1; then
+              echo "✅ CMS API is responding"
+              break
+            fi
+            echo "CMS API check $i/5 failed, retrying..."
+            if [ $i -eq 5 ]; then
+              echo "❌ CMS API health check failed"
+              docker-compose -f docker-compose.yml -f docker-compose.local-build.yml logs cms --tail=20
+              exit 1
+            fi
+            sleep 10
+          done
           
-          # Test frontend
-          if curl -f http://localhost:3000 > /dev/null 2>&1; then
-            echo "✅ Frontend is responding"
-          else
-            echo "❌ Frontend health check failed"
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs nextjs --tail=20
-            exit 1
-          fi
+          # Test frontend with retry
+          echo "Testing Frontend..."
+          for i in {1..5}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Frontend is responding"
+              break
+            fi
+            echo "Frontend check $i/5 failed, retrying..."
+            if [ $i -eq 5 ]; then
+              echo "❌ Frontend health check failed"
+              docker-compose -f docker-compose.yml -f docker-compose.local-build.yml logs nextjs --tail=20
+              exit 1
+            fi
+            sleep 10
+          done
           
           # Clean up old images
+          echo "=== Cleanup ==="
           docker image prune -f || echo "Image cleanup completed"
+          
+          # Final status check
+          echo "=== Final Status ==="
+          docker-compose -f docker-compose.yml -f docker-compose.local-build.yml ps
           
           echo "=== Deployment Summary ==="
           echo "✅ Production deployment completed successfully at $(date)"
           echo "🌐 Application available at: https://sliot.de"
           echo "🔧 n8n available at: https://n8n.sliot.de"
-          
-          # Show final status
-          docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
+          echo "🔐 Authentication: AWS Cognito integrated"
