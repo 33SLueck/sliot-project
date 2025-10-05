@@ -230,6 +230,63 @@ initializeSecrets().then(async config => {
     res.json(users);
   }));
 
+  // Create or update user (for Cognito callback)
+  app.post('/api/users', asyncHandler(async (req, res) => {
+    const { cognitoSub, email, name } = req.body;
+
+    if (!cognitoSub || !email) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: cognitoSub and email are required' 
+      });
+    }
+
+    try {
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { cognitoId: cognitoSub }
+      });
+
+      if (existingUser) {
+        // Update existing user if needed
+        const updatedUser = await prisma.user.update({
+          where: { cognitoId: cognitoSub },
+          data: {
+            email,
+            displayName: name || existingUser.displayName,
+            lastLoginAt: new Date()
+          }
+        });
+        return res.json(updatedUser);
+      }
+
+      // Create new user
+      const newUser = await prisma.user.create({
+        data: {
+          cognitoId: cognitoSub,
+          email,
+          displayName: name || email.split('@')[0],
+          role: 'EDITOR', // Default role
+          lastLoginAt: new Date()
+        }
+      });
+
+      console.log(`✅ Created new user: ${email} (${cognitoSub})`);
+      res.status(201).json(newUser);
+
+    } catch (error) {
+      console.error('Error creating/updating user:', error);
+      
+      // Handle unique constraint violation
+      if (error.code === 'P2002') {
+        return res.status(409).json({ 
+          error: 'User with this email already exists' 
+        });
+      }
+      
+      throw error;
+    }
+  }));
+
   // --- SETTINGS API ---
   app.get('/api/settings', asyncHandler(async (req, res) => {
     const settings = await prisma.setting.findMany({

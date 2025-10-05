@@ -4,17 +4,27 @@
 services:
   nextjs:
     image: ghcr.io/33slueck/sliot-project/nextjs:latest
+    ports:
+      - "127.0.0.1:3000:3000"  # Bind to localhost only for nginx proxy
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_CMS_URL=http://cms:4000
       - NEXT_PUBLIC_N8N_URL=http://n8n:5678
+      # Authentication secrets from AWS Parameter Store
+      - COGNITO_CLIENT_ID={{resolve:ssm:/sliot-project/cognito-client-id}}
+      - COGNITO_CLIENT_SECRET={{resolve:ssm:/sliot-project/cognito-client-secret}}
+      - COGNITO_ISSUER={{resolve:ssm:/sliot-project/cognito-issuer}}
+      - NEXTAUTH_SECRET={{resolve:ssm:/sliot-project/nextauth-secret}}
+      - NEXTAUTH_URL=https://sliot.de
 
   cms:
     image: ghcr.io/33slueck/sliot-project/cms:latest
+    ports:
+      - "127.0.0.1:4000:4000"  # Bind to localhost only for nginx proxy
 
   n8n:
     ports:
-      - "127.0.0.1:5678:5678"  # Localhost only - accessed via Nginx proxy  
+      - "127.0.0.1:5678:5678"  # Bind to localhost only for nginx proxy  
     environment:
       - N8N_SECURE_COOKIE=true
       - N8N_HOST=n8n.sliot.de
