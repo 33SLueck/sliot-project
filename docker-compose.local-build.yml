@@ -4,7 +4,8 @@
 services:
   nextjs:
     build: ./frontend
-    # No external ports - accessed via nginx
+    ports:
+      - "127.0.0.1:3000:3000"  # Expose frontend for nginx proxy
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_CMS_URL=http://cms:4000
