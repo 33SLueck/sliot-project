@@ -1,5 +1,22 @@
 
 services:
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - nextjs
+      - cms
+      - n8n
+    restart: unless-stopped
+    networks:
+      - sliot-net
+
   nextjs:
     build: ./frontend
     container_name: nextjs

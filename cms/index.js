@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { initializeSecrets } = require('../utils/secrets');
+const { initializeSecrets } = require('./secrets');
 
 const app = express();
 app.use(cors());
