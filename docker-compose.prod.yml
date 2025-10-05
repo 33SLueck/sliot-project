@@ -24,3 +24,7 @@ services:
       - N8N_PORT=8443
       - N8N_PROTOCOL=https
       - WEBHOOK_URL=https://sliot.de:8443/
+      - N8N_EDITOR_BASE_URL=https://sliot.de:8443/
+      - VUE_APP_URL_BASE_API=https://sliot.de:8443/
+      - N8N_LISTEN_ADDRESS=0.0.0.0
+      - N8N_BASIC_AUTH_ACTIVE=false

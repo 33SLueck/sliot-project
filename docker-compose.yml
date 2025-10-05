@@ -46,6 +46,8 @@ services:
       - N8N_PORT=${N8N_PORT:-5678}
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL:-}
+      - VUE_APP_URL_BASE_API=${VUE_APP_URL_BASE_API:-}
     depends_on:
       - db
     networks:
