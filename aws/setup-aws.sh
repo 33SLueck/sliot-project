@@ -50,10 +50,26 @@ aws iam create-role \
   2>/dev/null || echo "Role $ROLE_NAME already exists"
 
 # Attach policy to role
-echo "🔗 Attaching policy to role..."
+echo "🔗 Attaching custom policy to role..."
 aws iam attach-role-policy \
   --role-name $ROLE_NAME \
   --policy-arn $POLICY_ARN \
+  --output text \
+  --no-paginate
+
+# Attach AWS managed policy for Systems Manager Session Manager
+echo "🔗 Attaching SSM Session Manager policy to role..."
+aws iam attach-role-policy \
+  --role-name $ROLE_NAME \
+  --policy-arn "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" \
+  --output text \
+  --no-paginate
+
+# Attach AWS managed policy for EC2 Instance Connect
+echo "🔗 Attaching EC2 Instance Connect policy to role..."
+aws iam attach-role-policy \
+  --role-name $ROLE_NAME \
+  --policy-arn "arn:aws:iam::aws:policy/EC2InstanceConnect" \
   --output text \
   --no-paginate
 

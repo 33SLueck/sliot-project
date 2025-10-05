@@ -26,7 +26,7 @@ jobs:
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ec2-16-16-134-76.eu-north-1.compute.amazonaws.com
+        host: ec2-13-62-17-97.eu-north-1.compute.amazonaws.com
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         timeout: 60s
@@ -63,18 +63,41 @@ jobs:
           # Create necessary directories
           mkdir -p postgres-data
           
+          # Check disk space and expand filesystem if needed
+          echo "=== Disk Space Check ==="
+          df -h
+          
+          # Expand filesystem to use full disk (in case it hasn't auto-expanded)
+          sudo resize2fs /dev/nvme0n1p1 2>/dev/null || sudo resize2fs /dev/xvda1 2>/dev/null || echo "Filesystem already expanded or different device"
+          
+          echo "=== After filesystem expansion ==="
+          df -h
+          
           # Clean up any existing containers
           docker-compose -f docker-compose.yml -f docker-compose.local-build.yml down --remove-orphans || true
           
           # Build and start services locally
           echo "Building and starting services locally..."
-          docker-compose -f docker-compose.yml -f docker-compose.local-build.yml up -d --build
+          if docker-compose -f docker-compose.yml -f docker-compose.local-build.yml up -d --build; then
+            echo "Services started successfully!"
+          else
+            echo "Service startup failed, checking disk space and Docker status..."
+            df -h
+            docker system df
+            docker ps -a
+            exit 1
+          fi
           
           # Clean up old images
-          docker image prune -f
+          docker image prune -f || echo "Image cleanup failed but continuing..."
           
-          # Show status
-          docker-compose ps
+          # Show status and logs (with error handling)
+          echo "Deployment completed. Checking status..."
+          docker-compose ps || echo "Failed to show container status"
           
-          # Show logs for debugging
-          docker-compose logs --tail=50
+          # Show logs for debugging (limit output to prevent timeout)
+          echo "=== Service Logs ==="
+          timeout 30 docker-compose logs --tail=20 || echo "Failed to retrieve logs or timeout reached"
+          
+          echo "=== Deployment Summary ==="
+          echo "Deployment script completed at $(date)"
