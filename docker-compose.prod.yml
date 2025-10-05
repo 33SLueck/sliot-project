@@ -17,9 +17,11 @@ services:
 
   n8n:
     ports:
-      - "127.0.0.1:5678:5678"  # SSH tunnel only in production
+      - "127.0.0.1:5678:5678"  # Localhost only - accessed via Nginx proxy
     environment:
       - N8N_SECURE_COOKIE=true
-      - N8N_HOST=localhost
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
+      - N8N_HOST=sliot.de
+      - N8N_PORT=443
+      - N8N_PROTOCOL=https
+      - N8N_PATH=/n8n/
+      - WEBHOOK_URL=https://sliot.de/n8n/
