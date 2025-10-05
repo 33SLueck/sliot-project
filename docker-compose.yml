@@ -17,15 +17,36 @@ services:
 
   cms:
     build: ./cms
-    container_name: cms
-    restart: always
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@db:5432/mycms}
-      - NODE_ENV=${NODE_ENV:-development}
+      DATABASE_URL: ${CMS_DATABASE_URL:-postgresql://postgres:password@db:5432/sliot_cms}
+      PORT: 4000
+      NODE_ENV: ${NODE_ENV:-development}
+      # Cognito configuration
+      AWS_COGNITO_USER_POOL_ID: ${AWS_COGNITO_USER_POOL_ID:-}
+      AWS_COGNITO_CLIENT_ID: ${AWS_COGNITO_CLIENT_ID:-}
+      AWS_REGION: ${AWS_REGION:-eu-north-1}
+    ports:
+      - "${CMS_PORT:-4000}:4000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - sliot-net
+    # Run migrations on startup
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...'
+        npx prisma migrate deploy
+        echo 'Database migrations completed'
+        npx prisma generate
+        echo 'Prisma client generated'
+        npm start
+      "
 
   n8n:
     image: n8nio/n8n:latest
@@ -65,6 +86,11 @@ services:
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - sliot-net
 

@@ -1,4 +1,10 @@
 FROM node:20-alpine
+
+# Install OpenSSL and other dependencies for Prisma
+RUN apk add --no-cache \
+    openssl \
+    libc6-compat
+
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --legacy-peer-deps
