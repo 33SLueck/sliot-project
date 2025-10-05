@@ -92,6 +92,74 @@ jobs:
             exit 1
           fi
           
+          # Wait for services to be ready
+          echo "Waiting for services to be ready..."
+          sleep 30
+          
+          # Run database migrations
+          echo "=== Running Database Migrations ==="
+          if docker-compose exec -T cms npx prisma migrate deploy; then
+            echo "✅ Database migrations completed successfully"
+          else
+            echo "❌ Database migrations failed"
+            docker-compose logs cms --tail=20
+            exit 1
+          fi
+          
+          # Check if database needs seeding (only if no data exists)
+          echo "=== Checking Database State ==="
+          USER_COUNT=$(docker-compose exec -T cms node -e "
+            const { PrismaClient } = require('@prisma/client');
+            const prisma = new PrismaClient();
+            prisma.user.count().then(count => {
+              console.log(count);
+              process.exit(0);
+            }).catch(() => {
+              console.log(0);
+              process.exit(0);
+            });
+          " 2>/dev/null || echo "0")
+          
+          if [ "$USER_COUNT" -eq 0 ]; then
+            echo "Database appears empty, running seed..."
+            if docker-compose exec -T cms npx prisma db seed; then
+              echo "✅ Database seeded successfully"
+            else
+              echo "⚠️ Database seeding failed, but continuing deployment"
+            fi
+          else
+            echo "✅ Database already contains data, skipping seed"
+          fi
+          
+          # Validate deployment
+          echo "=== Validating Deployment ==="
+          if docker-compose exec -T cms node -e "
+            const http = require('http');
+            http.get('http://localhost:4000/health', (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => {
+                const result = JSON.parse(data);
+                if (result.status === 'healthy') {
+                  console.log('✅ CMS health check passed');
+                  process.exit(0);
+                } else {
+                  console.log('❌ CMS health check failed');
+                  process.exit(1);
+                }
+              });
+            }).on('error', () => {
+              console.log('❌ CMS health check failed');
+              process.exit(1);
+            });
+          "; then
+            echo "✅ Deployment validation successful"
+          else
+            echo "❌ Deployment validation failed"
+            docker-compose logs cms --tail=20
+            exit 1
+          fi
+          
           # Clean up old images
           docker image prune -f || echo "Image cleanup failed but continuing..."
           
