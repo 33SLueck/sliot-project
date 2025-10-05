@@ -1,103 +1,298 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+
+interface Post {
+  id: number;
+  title: string;
+  content: string;
+  excerpt?: string;
+  slug: string;
+  status: string;
+  authorId: string;
+  categoryId?: number;
+  createdAt: string;
+  updatedAt: string;
+  category?: Category;
+  tags?: Tag[];
+}
+
+interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+}
+
+interface Tag {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+interface CMSStats {
+  totalPosts: number;
+  totalCategories: number;
+  totalTags: number;
+  totalUsers: number;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [stats, setStats] = useState<CMSStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    const fetchCMSData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Use environment variable or fallback to localhost for client-side requests
+        const apiUrl = process.env.NEXT_PUBLIC_CMS_URL || 'http://localhost:4000';
+
+        // Fetch posts, categories, and stats in parallel
+        const [postsResponse, categoriesResponse, statsResponse] = await Promise.all([
+          fetch(`${apiUrl}/api/posts?limit=6`),
+          fetch(`${apiUrl}/api/categories`),
+          fetch(`${apiUrl}/api/stats`)
+        ]);
+
+        if (!postsResponse.ok || !categoriesResponse.ok || !statsResponse.ok) {
+          throw new Error('Failed to fetch CMS data');
+        }
+
+        const postsData = await postsResponse.json();
+        const categoriesData = await categoriesResponse.json();
+        const statsData = await statsResponse.json();
+
+        // Handle both possible response formats
+        setPosts(postsData.posts || postsData || []);
+        setCategories(categoriesData.categories || categoriesData || []);
+        setStats(statsData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load content');
+        console.error('Error fetching CMS data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCMSData();
+  }, []);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const truncateContent = (content: string, maxLength: number = 150) => {
+    if (content.length <= maxLength) return content;
+    return content.substring(0, maxLength) + '...';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading CMS content...</p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Connection Error</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">SLIoT CMS</h1>
+              <p className="text-gray-600">Content Management System</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                🟢 Connected
+              </span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Stats Section */}
+      {stats && (
+        <section className="bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600">{stats.totalPosts}</div>
+                <div className="text-gray-600">Posts</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-600">{stats.totalCategories}</div>
+                <div className="text-gray-600">Categories</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-purple-600">{stats.totalTags}</div>
+                <div className="text-gray-600">Tags</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-orange-600">{stats.totalUsers}</div>
+                <div className="text-gray-600">Users</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Main Content - Posts */}
+          <div className="lg:col-span-3">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Latest Posts</h2>
+              <span className="text-gray-500">{posts.length} posts</span>
+            </div>
+
+            {posts.length > 0 ? (
+              <div className="grid gap-6">
+                {posts.map((post) => (
+                  <article key={post.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                    <div className="p-6">
+                      <div className="flex items-center space-x-4 mb-4">
+                        {post.category && (
+                          <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                            {post.category.name}
+                          </span>
+                        )}
+                        <span className="text-gray-500 text-sm">
+                          {formatDate(post.createdAt)}
+                        </span>
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          post.status === 'published' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {post.status}
+                        </span>
+                      </div>
+                      
+                      <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                        {post.title}
+                      </h3>
+                      
+                      <p className="text-gray-600 mb-4">
+                        {post.excerpt || truncateContent(post.content)}
+                      </p>
+
+                      {post.tags && post.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {post.tags.map((tag) => (
+                            <span key={tag.id} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm">
+                              #{tag.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 text-sm">
+                          Slug: /{post.slug}
+                        </span>
+                        <button className="text-blue-600 hover:text-blue-800 font-medium">
+                          Read More →
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                <div className="text-gray-400 text-4xl mb-4">📝</div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No posts found</h3>
+                <p className="text-gray-600">The CMS database appears to be empty.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar - Categories */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Categories</h3>
+              
+              {categories.length > 0 ? (
+                <div className="space-y-3">
+                  {categories.map((category) => (
+                    <div key={category.id} className="flex justify-between items-center">
+                      <div>
+                        <div className="font-medium text-gray-900">{category.name}</div>
+                        {category.description && (
+                          <div className="text-sm text-gray-600">{category.description}</div>
+                        )}
+                        <div className="text-xs text-gray-500">/{category.slug}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">
+                  <div className="text-2xl mb-2">📂</div>
+                  <p>No categories found</p>
+                </div>
+              )}
+            </div>
+
+            {/* CMS Info */}
+            <div className="bg-blue-50 rounded-lg border border-blue-200 p-6 mt-6">
+              <h3 className="text-lg font-semibold text-blue-900 mb-3">CMS Status</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-blue-700">API:</span>
+                  <span className="text-blue-900 font-medium">localhost:4000</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Frontend:</span>
+                  <span className="text-blue-900 font-medium">localhost:8080</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Database:</span>
+                  <span className="text-blue-900 font-medium">PostgreSQL</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-700">ORM:</span>
+                  <span className="text-blue-900 font-medium">Prisma</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
