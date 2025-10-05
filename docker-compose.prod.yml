@@ -23,5 +23,4 @@ services:
       - N8N_HOST=sliot.de
       - N8N_PORT=443
       - N8N_PROTOCOL=https
-      - N8N_PATH=/n8n/
-      - WEBHOOK_URL=https://sliot.de/n8n/
+      - WEBHOOK_URL=https://sliot.de/
