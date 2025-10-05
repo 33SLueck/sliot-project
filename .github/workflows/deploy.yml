@@ -100,18 +100,22 @@ jobs:
           
           # Stop running containers gracefully
           echo "=== Stopping Current Services ==="
-          docker-compose -f docker-compose.yml -f docker-compose.local-build.yml down --remove-orphans || true
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml down --remove-orphans || true
           
           # Clean up any dangling containers
           docker container prune -f || true
           
-          # Start services (using local-build for now, can switch to prod later)
-          echo "=== Starting Services ==="
-          if docker-compose -f docker-compose.yml -f docker-compose.local-build.yml up -d --build; then
-            echo "✅ Services started successfully!"
+          # Load Parameter Store values and start production services
+          echo "=== Loading Parameter Store Configuration ==="
+          chmod +x ./load-parameters.sh
+          ./load-parameters.sh --deploy
+          
+          # Verify services started
+          if [ $? -eq 0 ]; then
+            echo "✅ Production services started successfully with Parameter Store integration!"
           else
             echo "❌ Service startup failed"
-            docker-compose -f docker-compose.yml -f docker-compose.local-build.yml logs --tail=20
+            docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=20
             exit 1
           fi
           
@@ -161,7 +165,7 @@ jobs:
             echo "CMS API check $i/5 failed, retrying..."
             if [ $i -eq 5 ]; then
               echo "❌ CMS API health check failed"
-              docker-compose -f docker-compose.yml -f docker-compose.local-build.yml logs cms --tail=20
+              docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs cms --tail=20
               exit 1
             fi
             sleep 10
@@ -177,7 +181,7 @@ jobs:
             echo "Frontend check $i/5 failed, retrying..."
             if [ $i -eq 5 ]; then
               echo "❌ Frontend health check failed"
-              docker-compose -f docker-compose.yml -f docker-compose.local-build.yml logs nextjs --tail=20
+              docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs nextjs --tail=20
               exit 1
             fi
             sleep 10
@@ -189,7 +193,7 @@ jobs:
           
           # Final status check
           echo "=== Final Status ==="
-          docker-compose -f docker-compose.yml -f docker-compose.local-build.yml ps
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
           
           echo "=== Deployment Summary ==="
           echo "✅ Production deployment completed successfully at $(date)"

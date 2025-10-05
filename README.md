@@ -75,6 +75,49 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 - **URL**: `https://your-domain.com`
 - **OAuth Callback**: `https://your-domain.com/rest/oauth2-credential/callback`
 
+## 🔑 Authentication Setup
+
+### AWS Parameter Store Configuration
+
+For production deployment with Cognito authentication, configure the following parameters in AWS Parameter Store:
+
+```bash
+# Set up Cognito authentication parameters
+aws ssm put-parameter \
+  --name "/sliot-project/cognito-client-id" \
+  --value "your-cognito-client-id" \
+  --type "String" \
+  --region eu-north-1
+
+aws ssm put-parameter \
+  --name "/sliot-project/cognito-client-secret" \
+  --value "your-cognito-client-secret" \
+  --type "SecureString" \
+  --region eu-north-1
+
+aws ssm put-parameter \
+  --name "/sliot-project/cognito-issuer" \
+  --value "https://cognito-idp.eu-north-1.amazonaws.com/eu-north-1_YourUserPool" \
+  --type "String" \
+  --region eu-north-1
+
+aws ssm put-parameter \
+  --name "/sliot-project/nextauth-secret" \
+  --value "your-32-character-random-secret" \
+  --type "SecureString" \
+  --region eu-north-1
+```
+
+### Environment Variables
+
+The production deployment uses the `load-parameters.sh` script to automatically retrieve these values from Parameter Store and set them as environment variables:
+
+- `COGNITO_CLIENT_ID` - Your AWS Cognito User Pool Client ID
+- `COGNITO_CLIENT_SECRET` - Your AWS Cognito User Pool Client Secret  
+- `COGNITO_ISSUER` - Your AWS Cognito User Pool Issuer URL
+- `NEXTAUTH_SECRET` - Random 32-character secret for NextAuth.js
+- `NEXTAUTH_URL` - Your production domain URL
+
 ## 🔐 Security Features
 
 ### Implemented Security Measures
@@ -178,12 +221,22 @@ curl http://localhost:5678  # n8n
 ### For Production
 
 ```bash
-# Deploy production environment
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Deploy production environment with AWS Parameter Store integration
+# First, load authentication secrets from Parameter Store:
+./load-parameters.sh --deploy
+
+# Or manually set environment variables and deploy:
+# export COGNITO_CLIENT_ID=<your-client-id>
+# export COGNITO_CLIENT_SECRET=<your-client-secret>
+# export COGNITO_ISSUER=<your-cognito-issuer>
+# export NEXTAUTH_SECRET=<your-nextauth-secret>
+# docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Check status
 docker-compose ps
 ```
+
+**⚠️ Important**: Production deployment requires AWS Parameter Store configuration for Cognito authentication. See [Authentication Setup](#authentication-setup) for details.
 
 ## 📚 Documentation
 
