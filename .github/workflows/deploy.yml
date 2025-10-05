@@ -34,11 +34,11 @@ jobs:
         debug: true
         script: |
           # Create project directory if it doesn't exist
-          sudo mkdir -p /home/ubuntu/sliot-project
-          sudo chown ubuntu:ubuntu /home/ubuntu/sliot-project
+          sudo mkdir -p /home/ec2-user/sliot-project
+          sudo chown ec2-user:ec2-user /home/ec2-user/sliot-project
           
           # Navigate to project directory
-          cd /home/ubuntu/sliot-project
+          cd /home/ec2-user/sliot-project
           
           # Clone or update repository
           if [ ! -d ".git" ]; then
@@ -49,13 +49,17 @@ jobs:
           
           # Install Docker and Docker Compose if not already installed
           if ! command -v docker &> /dev/null; then
-            curl -fsSL https://get.docker.com -o get-docker.sh
-            sudo sh get-docker.sh
-            sudo usermod -aG docker ubuntu
+            # Amazon Linux uses yum package manager
+            sudo yum update -y
+            sudo yum install -y docker
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker ec2-user
+            
+            # Install Docker Compose
             sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
             sudo chmod +x /usr/local/bin/docker-compose
-            # Restart shell to apply docker group
-            sudo systemctl restart docker
+            
             # Wait for docker to be ready
             sleep 10
           fi
