@@ -20,7 +20,7 @@ services:
       - "127.0.0.1:5678:5678"  # Localhost only - accessed via Nginx proxy
     environment:
       - N8N_SECURE_COOKIE=true
-      - N8N_HOST=sliot.de
+      - N8N_HOST=sliot.de:8443
       - N8N_PORT=8443
       - N8N_PROTOCOL=https
       - WEBHOOK_URL=https://sliot.de:8443/
