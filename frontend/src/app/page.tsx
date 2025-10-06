@@ -1,6 +1,4 @@
-'use client';
 
-import { useState, useEffect } from 'react';
 import AuthHeader from '@/components/AuthHeader';
 
 interface Post {
@@ -16,6 +14,7 @@ interface Post {
   updatedAt: string;
   category?: Category;
   tags?: Tag[];
+
 }
 
 interface Category {
@@ -38,51 +37,44 @@ interface CMSStats {
   totalUsers: number;
 }
 
-export default function Home() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [stats, setStats] = useState<CMSStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+// Server action to fetch CMS data
+async function fetchCMSData() {
+  const apiUrl = process.env.NEXT_PUBLIC_CMS_URL || 'http://cms:4000';
+  const [postsResponse, categoriesResponse, statsResponse] = await Promise.all([
+    fetch(`${apiUrl}/api/posts?limit=6`),
+    fetch(`${apiUrl}/api/categories`),
+    fetch(`${apiUrl}/api/stats`)
+  ]);
 
-  useEffect(() => {
-    const fetchCMSData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  if (!postsResponse.ok || !categoriesResponse.ok || !statsResponse.ok) {
+    throw new Error('Failed to fetch CMS data');
+  }
 
-        // Use environment variable or fallback to localhost for client-side requests
-        const apiUrl = process.env.NEXT_PUBLIC_CMS_URL || 'http://localhost:4000';
+  const postsData = await postsResponse.json();
+  const categoriesData = await categoriesResponse.json();
+  const statsData = await statsResponse.json();
 
-        // Fetch posts, categories, and stats in parallel
-        const [postsResponse, categoriesResponse, statsResponse] = await Promise.all([
-          fetch(`${apiUrl}/api/posts?limit=6`),
-          fetch(`${apiUrl}/api/categories`),
-          fetch(`${apiUrl}/api/stats`)
-        ]);
+  return {
+    posts: postsData.posts || postsData || [],
+    categories: categoriesData.categories || categoriesData || [],
+    stats: statsData,
+  };
+}
 
-        if (!postsResponse.ok || !categoriesResponse.ok || !statsResponse.ok) {
-          throw new Error('Failed to fetch CMS data');
-        }
 
-        const postsData = await postsResponse.json();
-        const categoriesData = await categoriesResponse.json();
-        const statsData = await statsResponse.json();
-
-        // Handle both possible response formats
-        setPosts(postsData.posts || postsData || []);
-        setCategories(categoriesData.categories || categoriesData || []);
-        setStats(statsData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load content');
-        console.error('Error fetching CMS data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCMSData();
-  }, []);
+export default async function Home() {
+  let posts: Post[] = [];
+  let categories: Category[] = [];
+  let stats: CMSStats | null = null;
+  let error: string | null = null;
+  try {
+    const data = await fetchCMSData();
+    posts = data.posts;
+    categories = data.categories;
+    stats = data.stats;
+  } catch (err) {
+    error = err instanceof Error ? err.message : 'Failed to load content';
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -97,17 +89,6 @@ export default function Home() {
     return content.substring(0, maxLength) + '...';
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading CMS content...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -115,12 +96,14 @@ export default function Home() {
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Connection Error</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Retry
-          </button>
+          <form method="GET">
+            <button 
+              type="submit"
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              Retry
+            </button>
+          </form>
         </div>
       </div>
     );
@@ -129,7 +112,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50">
       <AuthHeader />
-      
+      {/* ...existing code... */}
       {/* Stats Section */}
       {stats && (
         <section className="bg-white">
@@ -155,7 +138,7 @@ export default function Home() {
           </div>
         </section>
       )}
-
+      {/* ...existing code... */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Main Content - Posts */}
@@ -164,7 +147,6 @@ export default function Home() {
               <h2 className="text-2xl font-bold text-gray-900">Latest Posts</h2>
               <span className="text-gray-500">{posts.length} posts</span>
             </div>
-
             {posts.length > 0 ? (
               <div className="grid gap-6">
                 {posts.map((post) => (
@@ -187,15 +169,12 @@ export default function Home() {
                           {post.status}
                         </span>
                       </div>
-                      
                       <h3 className="text-xl font-semibold text-gray-900 mb-3">
                         {post.title}
                       </h3>
-                      
                       <p className="text-gray-600 mb-4">
                         {post.excerpt || truncateContent(post.content)}
                       </p>
-
                       {post.tags && post.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-4">
                           {post.tags.map((tag) => (
@@ -205,7 +184,6 @@ export default function Home() {
                           ))}
                         </div>
                       )}
-
                       <div className="flex justify-between items-center">
                         <span className="text-gray-500 text-sm">
                           Slug: /{post.slug}
@@ -226,12 +204,10 @@ export default function Home() {
               </div>
             )}
           </div>
-
           {/* Sidebar - Categories */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Categories</h3>
-              
               {categories.length > 0 ? (
                 <div className="space-y-3">
                   {categories.map((category) => (
@@ -253,7 +229,6 @@ export default function Home() {
                 </div>
               )}
             </div>
-
             {/* CMS Info */}
             <div className="bg-blue-50 rounded-lg border border-blue-200 p-6 mt-6">
               <h3 className="text-lg font-semibold text-blue-900 mb-3">CMS Status</h3>
