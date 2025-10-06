@@ -1,0 +1,98 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            
+            echo "=== Starting Simplified Deployment ==="
+            cd sliot-project
+            
+            # Pull latest changes
+            git fetch origin
+            git reset --hard origin/main
+            
+            # Create production environment file
+            cat > .env.production << EOF
+            NODE_ENV=production
+            POSTGRES_DB=sliot_cms
+            POSTGRES_USER=postgres
+            POSTGRES_PASSWORD=password
+            DATABASE_URL=postgresql://postgres:password@postgres:5432/sliot_cms
+            NEXT_PUBLIC_CMS_URL=http://cms:4000
+            NEXT_PUBLIC_N8N_URL=http://n8n:5678
+            COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
+            COGNITO_CLIENT_SECRET=${{ secrets.COGNITO_CLIENT_SECRET }}
+            COGNITO_ISSUER=${{ secrets.COGNITO_ISSUER }}
+            NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+            NEXTAUTH_URL=https://sliot.de
+            N8N_HOST=n8n.sliot.de
+            N8N_PORT=5678
+            N8N_PROTOCOL=http
+            N8N_BASIC_AUTH_ACTIVE=true
+            N8N_BASIC_AUTH_USER=admin
+            N8N_BASIC_AUTH_PASSWORD=admin
+            N8N_DISABLE_USER_MANAGEMENT=true
+            N8N_SECURE_COOKIE=true
+            N8N_WEBHOOK_URL=https://n8n.sliot.de/
+            EOF
+            
+            echo "=== Building and Starting Services ==="
+            docker-compose --env-file .env.production down || true
+            docker-compose --env-file .env.production build --no-cache
+            docker-compose --env-file .env.production up -d
+            
+            echo "=== Waiting for Services ==="
+            sleep 30
+            
+            echo "=== Health Checks ==="
+            # CMS Health Check
+            for i in {1..10}; do
+              if curl -f http://localhost:4000/health > /dev/null 2>&1; then
+                echo "✅ CMS is healthy"
+                break
+              fi
+              echo "CMS check $i/10..."
+              if [ $i -eq 10 ]; then
+                echo "❌ CMS health check failed"
+                docker-compose --env-file .env.production logs cms --tail=20
+                exit 1
+              fi
+              sleep 10
+            done
+            
+            # Frontend Health Check  
+            for i in {1..10}; do
+              if curl -f http://localhost:3000 > /dev/null 2>&1; then
+                echo "✅ Frontend is healthy"
+                break
+              fi
+              echo "Frontend check $i/10..."
+              if [ $i -eq 10 ]; then
+                echo "❌ Frontend health check failed"
+                docker-compose --env-file .env.production logs frontend --tail=20
+                exit 1
+              fi
+              sleep 15
+            done
+            
+            echo "=== Deployment Complete ==="
+            docker-compose --env-file .env.production ps
+            echo "🎉 Simplified deployment successful!"
