@@ -3,6 +3,7 @@
 
 const AWS = require('aws-sdk');
 
+
 // Initialize AWS SSM client only in production
 const ssm = process.env.NODE_ENV === 'production' ? new AWS.SSM({
   region: process.env.AWS_REGION || 'eu-central-1'
