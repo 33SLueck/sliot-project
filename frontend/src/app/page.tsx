@@ -39,7 +39,7 @@ interface CMSStats {
 
 // Server action to fetch CMS data
 async function fetchCMSData() {
-  const apiUrl = process.env.NEXT_PUBLIC_CMS_URL || 'http://cms:4000';
+  const apiUrl = process.env.CMS_INTERNAL_URL || 'http://cms:4000';
   const [postsResponse, categoriesResponse, statsResponse] = await Promise.all([
     fetch(`${apiUrl}/api/posts?limit=6`),
     fetch(`${apiUrl}/api/categories`),
