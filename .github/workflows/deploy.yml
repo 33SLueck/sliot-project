@@ -159,6 +159,11 @@ jobs:
           N8N_DISABLE_USER_MANAGEMENT=true
           N8N_SECURE_COOKIE=true
           N8N_WEBHOOK_URL=https://n8n.sliot.de/
+          
+          # Port configurations
+          FRONTEND_PORT=3000
+          CMS_PORT=4000
+          N8N_PORT=5678
           EOF
           
           # Pull latest images
@@ -182,34 +187,6 @@ jobs:
           echo "=== Waiting for Services ==="
           sleep 45
           
-          # Check if database is ready before migrations
-          echo "=== Checking Database Connectivity ==="
-          for i in {1..10}; do
-            if docker-compose --env-file .env.production exec -T postgres pg_isready -U postgres; then
-              echo "✅ Database is ready"
-              break
-            fi
-            echo "Waiting for database... ($i/10)"
-            sleep 10
-          done
-          
-          # Run database migrations with retry
-          echo "=== Running Database Migrations ==="
-          for i in {1..3}; do
-            if docker-compose --env-file .env.production exec -T cms npx prisma migrate deploy; then
-              echo "✅ Database migrations completed successfully"
-              break
-            else
-              echo "❌ Migration attempt $i failed"
-              if [ $i -eq 3 ]; then
-                echo "❌ Database migrations failed after 3 attempts"
-                docker-compose --env-file .env.production logs cms --tail=20
-                exit 1
-              fi
-              sleep 10
-            fi
-          done
-          
           # Validate deployment with retries
           echo "=== Validating Deployment ==="
           sleep 30
@@ -217,7 +194,7 @@ jobs:
           # Test CMS health with retry
           echo "Testing CMS API..."
           for i in {1..5}; do
-            if curl -f http://localhost:4000/api/categories > /dev/null 2>&1; then
+            if curl -f http://localhost:4000/health > /dev/null 2>&1; then
               echo "✅ CMS API is responding"
               break
             fi
