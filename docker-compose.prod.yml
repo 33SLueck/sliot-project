@@ -4,6 +4,8 @@
 services:
   nextjs:
     image: ghcr.io/33slueck/sliot-project/nextjs:latest
+    ports:
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_CMS_URL=http://cms:4000
