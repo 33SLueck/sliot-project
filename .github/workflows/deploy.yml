@@ -72,14 +72,12 @@ jobs:
           export NEXTJS_POSTGRES_PASSWORD=$(aws ssm get-parameter --name '/sliot-project/nextjs-postgres-password' --with-decryption --query 'Parameter.Value' --output text --region eu-north-1)
           export N8N_POSTGRES_PASSWORD=$(aws ssm get-parameter --name '/sliot-project/n8n-postgres-password' --with-decryption --query 'Parameter.Value' --output text --region eu-north-1)
 
-          cat > .env.production << EOF
-COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID
-COGNITO_CLIENT_SECRET=$COGNITO_CLIENT_SECRET
-COGNITO_ISSUER=$COGNITO_ISSUER
-NEXTAUTH_SECRET=$NEXTAUTH_SECRET
-NEXTJS_POSTGRES_PASSWORD=$NEXTJS_POSTGRES_PASSWORD
-N8N_POSTGRES_PASSWORD=$N8N_POSTGRES_PASSWORD
-EOF
+          echo "COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID" > .env.production
+          echo "COGNITO_CLIENT_SECRET=$COGNITO_CLIENT_SECRET" >> .env.production
+          echo "COGNITO_ISSUER=$COGNITO_ISSUER" >> .env.production
+          echo "NEXTAUTH_SECRET=$NEXTAUTH_SECRET" >> .env.production
+          echo "NEXTJS_POSTGRES_PASSWORD=$NEXTJS_POSTGRES_PASSWORD" >> .env.production
+          echo "N8N_POSTGRES_PASSWORD=$N8N_POSTGRES_PASSWORD" >> .env.production
 
           echo "=== Running Deploy Script ==="
           chmod +x deploy.sh
