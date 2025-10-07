@@ -14,6 +14,11 @@ fi
 echo "Pulling latest code..."
 git pull origin main
 
+# Fetch secrets from AWS Parameter Store
+echo "Fetching secrets from AWS Parameter Store..."
+chmod +x fetch-parameter-store-secrets.sh
+./fetch-parameter-store-secrets.sh
+
 # Stop running containers
 echo "Stopping running containers..."
 docker-compose -f docker-compose.prod.yml down --remove-orphans || true
@@ -22,16 +27,6 @@ docker-compose -f docker-compose.prod.yml down --remove-orphans || true
 echo "Pulling latest images..."
 docker pull ghcr.io/33slueck/sliot-project/nextjs:latest
 docker pull n8nio/n8n:latest
-
-# Create minimal .env.production
-echo "Writing .env.production..."
-cat > .env.production << EOF
-NODE_ENV=production
-FRONTEND_IMAGE=ghcr.io/33slueck/sliot-project/nextjs:latest
-FRONTEND_PORT=3000
-N8N_IMAGE=n8nio/n8n:latest
-N8N_PORT=5678
-EOF
 
 # Start services
 echo "Starting services..."

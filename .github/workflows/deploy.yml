@@ -79,6 +79,10 @@ jobs:
           echo "NEXTJS_POSTGRES_PASSWORD=$NEXTJS_POSTGRES_PASSWORD" >> .env.production
           echo "N8N_POSTGRES_PASSWORD=$N8N_POSTGRES_PASSWORD" >> .env.production
 
+          echo "=== Fetching Secrets from AWS Parameter Store ==="
+          chmod +x fetch-parameter-store-secrets.sh
+          ./fetch-parameter-store-secrets.sh
+
           echo "=== Running Deploy Script ==="
           chmod +x deploy.sh
           ./deploy.sh
