@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  nextjs:
+  frontend:
     image: ghcr.io/33slueck/sliot-project/nextjs:latest
     ports:
       - "3000:3000"
