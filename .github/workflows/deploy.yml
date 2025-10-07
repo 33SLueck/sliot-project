@@ -1,0 +1,238 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}/nextjs
+  IMAGE_NAME_CMS: ${{ github.repository }}/cms
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Extract metadata for CMS
+      id: meta-cms
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_CMS }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+
+    - name: Build and push CMS image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./cms
+        push: true
+        tags: ${{ steps.meta-cms.outputs.tags }}
+        labels: ${{ steps.meta-cms.outputs.labels }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        timeout: 120s
+        command_timeout: 20m
+        script: |
+          # Navigate to project directory
+          cd /home/ec2-user/sliot-project
+          
+          # Pull latest code
+          echo "=== Pulling Latest Code ==="
+          git pull origin main
+          
+          # Ensure Docker is running
+          echo "=== Checking Docker Status ==="
+          if ! sudo systemctl is-active --quiet docker; then
+            echo "Starting Docker service..."
+            sudo systemctl start docker
+            sleep 5
+          fi
+          
+          # Create necessary directories
+          mkdir -p postgres-data
+          
+          # Stop running containers gracefully
+          echo "=== Stopping Current Services ==="
+          docker-compose down --remove-orphans || true
+          
+          # Clean up any dangling containers
+          docker container prune -f || true
+          
+          # Load Parameter Store values and start production services
+          echo "=== Loading Parameter Store Values ==="
+          chmod +x load-parameters.sh
+          
+          # Source the parameters to make them available to the environment
+          export COGNITO_CLIENT_ID=$(aws ssm get-parameter --name '/sliot-project/cognito-client-id' --query 'Parameter.Value' --output text --region eu-north-1 2>/dev/null)
+          export COGNITO_CLIENT_SECRET=$(aws ssm get-parameter --name '/sliot-project/cognito-client-secret' --with-decryption --query 'Parameter.Value' --output text --region eu-north-1 2>/dev/null)
+          export COGNITO_ISSUER=$(aws ssm get-parameter --name '/sliot-project/cognito-issuer' --query 'Parameter.Value' --output text --region eu-north-1 2>/dev/null)
+          export NEXTAUTH_SECRET=$(aws ssm get-parameter --name '/sliot-project/nextauth-secret' --with-decryption --query 'Parameter.Value' --output text --region eu-north-1 2>/dev/null)
+          export NEXTAUTH_URL=https://sliot.de
+          
+          # Validate that all parameters were loaded
+          if [[ -z "$COGNITO_CLIENT_ID" || -z "$COGNITO_CLIENT_SECRET" || -z "$COGNITO_ISSUER" || -z "$NEXTAUTH_SECRET" ]]; then
+            echo "Error: Failed to load one or more parameters from AWS Parameter Store."
+            exit 1
+          fi
+          
+          echo "Successfully loaded parameters for deployment"
+          
+          # Create production environment file with Parameter Store values
+          cat > .env.production << EOF
+          NODE_ENV=production
+          
+          # Use registry images for production
+          FRONTEND_IMAGE=ghcr.io/33slueck/sliot-project/nextjs:latest
+          CMS_IMAGE=ghcr.io/33slueck/sliot-project/cms:latest
+          
+          # Database (production uses container-to-container communication)
+          POSTGRES_DB=sliot_cms
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=password
+          DATABASE_URL=postgresql://postgres:password@postgres:5432/sliot_cms
+          
+          # Frontend URLs (accessible from browser via reverse proxy)
+          NEXT_PUBLIC_CMS_URL=https://sliot.de/api
+          NEXT_PUBLIC_N8N_URL=https://n8n.sliot.de
+          
+          # Authentication from Parameter Store
+          COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID
+          COGNITO_CLIENT_SECRET=$COGNITO_CLIENT_SECRET
+          COGNITO_ISSUER=$COGNITO_ISSUER
+          NEXTAUTH_SECRET=$NEXTAUTH_SECRET
+          NEXTAUTH_URL=https://sliot.de
+          
+          # n8n Production Configuration
+          N8N_HOST=n8n.sliot.de
+          N8N_PORT=5678
+          N8N_PROTOCOL=http
+          N8N_BASIC_AUTH_ACTIVE=true
+          N8N_BASIC_AUTH_USER=admin
+          N8N_BASIC_AUTH_PASSWORD=admin
+          N8N_DISABLE_USER_MANAGEMENT=true
+          N8N_SECURE_COOKIE=true
+          N8N_WEBHOOK_URL=https://n8n.sliot.de/
+          
+          # Port configurations
+          FRONTEND_PORT=3000
+          CMS_PORT=4000
+          N8N_PORT=5678
+          EOF
+          
+          # Pull latest images
+          echo "=== Pulling Latest Images ==="
+          docker pull ghcr.io/33slueck/sliot-project/nextjs:latest
+          docker pull ghcr.io/33slueck/sliot-project/cms:latest
+          
+          # Start services with production environment
+          docker-compose --env-file .env.production up -d
+          
+          # Verify services started
+          if [ $? -eq 0 ]; then
+            echo "✅ Production services started successfully with Parameter Store integration!"
+          else
+            echo "❌ Service startup failed"
+            docker-compose --env-file .env.production logs --tail=20
+            exit 1
+          fi
+          
+          # Wait for services to be ready
+          echo "=== Waiting for Services ==="
+          sleep 45
+          
+          # Validate deployment with retries
+          echo "=== Validating Deployment ==="
+          sleep 30
+          
+          # Test CMS health with retry
+          echo "Testing CMS API..."
+          for i in {1..5}; do
+            if curl -f http://localhost:4000/health > /dev/null 2>&1; then
+              echo "✅ CMS API is responding"
+              break
+            fi
+            echo "CMS API check $i/5 failed, retrying..."
+            if [ $i -eq 5 ]; then
+              echo "❌ CMS API health check failed"
+              docker-compose --env-file .env.production logs cms --tail=20
+              exit 1
+            fi
+            sleep 15
+          done
+          
+          # Test frontend with retry
+          echo "Testing Frontend..."
+          for i in {1..8}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Frontend is responding"
+              break
+            fi
+            echo "Frontend check $i/8 failed, retrying..."
+            if [ $i -eq 8 ]; then
+              echo "❌ Frontend health check failed"
+              docker-compose --env-file .env.production logs frontend --tail=20
+              exit 1
+            fi
+            sleep 15
+          done
+          
+          # Clean up old images
+          echo "=== Cleanup ==="
+          docker image prune -f || echo "Image cleanup completed"
+          
+          # Final status check
+          echo "=== Final Status ==="
+          docker-compose --env-file .env.production ps
+          
+          echo "=== Deployment Summary ==="
+          echo "✅ Production deployment completed successfully at $(date)"
+          echo "🌐 Application available at: https://sliot.de"
+          echo "🔧 n8n available at: https://n8n.sliot.de"
+          echo "🔐 Authentication: AWS Cognito integrated"

@@ -1,0 +1,66 @@
+version: '3.8'
+services:
+  nextjs:
+    image: ghcr.io/33slueck/sliot-project/nextjs:latest
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:${NEXTJS_POSTGRES_PASSWORD}@nextjs-postgres:5432/sliot_prod
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+      COGNITO_CLIENT_SECRET: ${COGNITO_CLIENT_SECRET}
+      COGNITO_ISSUER: ${COGNITO_ISSUER}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: https://sliot.de
+
+  nextjs-postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${NEXTJS_POSTGRES_PASSWORD}
+      POSTGRES_DB: sliot_prod
+    volumes:
+      - nextjs_postgres_data:/var/lib/postgresql/data
+
+  n8n-postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: ${N8N_POSTGRES_PASSWORD}
+      POSTGRES_DB: n8n_db
+    volumes:
+      - n8n_postgres_data:/var/lib/postgresql/data
+
+  n8n:
+    image: n8nio/n8n:latest
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: n8n-postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n_db
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${N8N_POSTGRES_PASSWORD}
+      N8N_SECURE_COOKIE: true
+      N8N_HOST: n8n.sliot.de
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_PATH: /
+      WEBHOOK_URL: https://n8n.sliot.de/
+      N8N_EDITOR_BASE_URL: https://n8n.sliot.de/
+      N8N_EXTERNAL_FRONTEND_HOST: https://n8n.sliot.de
+      N8N_BASIC_AUTH_ACTIVE: true
+      N8N_DISABLE_USER_MANAGEMENT: true
+      N8N_PUBLIC_API_DISABLED: true
+      N8N_TELEMETRY_ENABLED: false
+      N8N_VERSION_NOTIFICATIONS_ENABLED: false
+      N8N_DIAGNOSTICS_ENABLED: false
+    ports:
+      - "127.0.0.1:5678:5678"
+    depends_on:
+      - n8n-postgres
+
+volumes:
+  nextjs_postgres_data:
+  n8n_postgres_data:
