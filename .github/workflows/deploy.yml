@@ -64,5 +64,5 @@ jobs:
           echo "=== Pulling Latest Code ==="
           git pull origin main
           echo "=== Running Deploy Script ==="
-          chmod +x frontend/deploy.sh
-          ./frontend/deploy.sh
+          chmod +x deploy.sh
+          ./deploy.sh
