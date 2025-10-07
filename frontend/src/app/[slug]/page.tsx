@@ -16,6 +16,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
   return (
     <main>
       <h1>{page.title}</h1>
+      
       <div>
         {page.content?.body ? JSON.stringify(page.content.body) : 'No content'}
       </div>
